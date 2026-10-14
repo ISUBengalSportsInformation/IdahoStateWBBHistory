@@ -127,6 +127,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
     <button class="tab-btn" role="tab" data-tab="series" aria-selected="true">Series history</button>
     <button class="tab-btn" role="tab" data-tab="results" aria-selected="false">All results</button>
     <button class="tab-btn" role="tab" data-tab="records" aria-selected="false">Records</button>
+    <button class="tab-btn" role="tab" data-tab="coaches" aria-selected="false">Coaches</button>
     <button class="tab-btn" role="tab" data-tab="add" aria-selected="false">Add games</button>
   </nav>
 
@@ -160,7 +161,16 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
     <div class="rec-grid" id="recGrid"></div>
     <h2 style="margin-top:24px">By season</h2>
     <p class="hint">Records from the games entered so far for each season.</p>
-    <div class="tscroll"><table><thead><tr><th>Season</th><th>Overall</th><th>Home</th><th>Away</th><th>Neutral</th><th>Avg score</th></tr></thead><tbody id="seasonBody"></tbody></table></div>
+    <div class="tscroll"><table><thead><tr><th>Season</th><th>Overall</th><th>Home</th><th>Away</th><th>Neutral</th><th>Avg score</th><th>Coach</th></tr></thead><tbody id="seasonBody"></tbody></table></div>
+    <p class="hint" id="seasonNotes" style="margin-top:10px"></p>
+  </section>
+
+  <!-- COACHES -->
+  <section class="panel" id="panel-coaches">
+    <h2>Coaching records</h2>
+    <p class="hint">Counted from the game list, so the current coach's record updates as games are added. 2001-02 is split by game: the first 20 games under Shirley Huyett, the last 7 under Lynn Kennedy.</p>
+    <div class="tscroll"><table><thead><tr><th>Coach</th><th>Years</th><th>Seasons</th><th>Overall</th><th>Pct</th><th>Home</th><th>Away</th><th>Neutral</th><th>Best season</th></tr></thead><tbody id="coachBody"></tbody></table></div>
+    <p class="hint" id="coachNote" style="margin-top:10px"></p>
   </section>
 
   <!-- ADD -->
@@ -318,12 +328,63 @@ document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', (
 }));
 
 /* ---------- render ---------- */
+/* ---------- coaches ---------- */
+const COACHES = [
+  {name: 'Kevin Gilbride & Sandra Noakes', from: '1974-75', to: '1974-75'},
+  {name: 'Nancy Shay', from: '1975-76', to: '1979-80'},
+  {name: 'Beth Bricker', from: '1980-81', to: '1982-83'},
+  {name: 'Mark French', from: '1983-84', to: '1986-87'},
+  {name: 'Ted Anderson', from: '1987-88', to: '1994-95'},
+  {name: 'Steve Hayes', from: '1995-96', to: '1995-96'},
+  {name: 'Ardie McInelly', from: '1996-97', to: '2000-01'},
+  {name: 'Shirley Huyett', from: '2001-02', to: '2001-02', split: 'first', games: 20},
+  {name: 'Lynn Kennedy', from: '2001-02', to: '2001-02', split: 'last'},
+  {name: 'Jon Newlee', from: '2002-03', to: '2007-08'},
+  {name: 'Seton Sobolewski', from: '2008-09', to: null}
+];
+const SEASON_NOTES = {
+  '1975-76': 'Official record 9-7 (7-1 conference); only 5 of 16 games are known.',
+  '1978-79': 'Includes the forfeit win over Western Wyoming (printed 16-10 without it).',
+  '1982-83': 'Game list totals 10-16; the printed header says 8-18.'
+};
+function seasonCoach(se){
+  if (se === '2001-02') return 'Shirley Huyett / Lynn Kennedy';
+  const c = COACHES.find(c => !c.split && se >= c.from && (!c.to || se <= c.to));
+  return c ? c.name : '';
+}
+function coachGames(c){
+  const inRange = games.filter(g => g.season >= c.from && (!c.to || g.season <= c.to));
+  if (!c.split) return inRange;
+  const sorted = inRange.slice().sort(byDate);
+  return c.split === 'first' ? sorted.slice(0, c.games) : sorted.slice(20);
+}
+function renderCoaches(){
+  const body = $('coachBody'); if (!body) return;
+  const pct = r => (r.w + r.l) ? (r.w / (r.w + r.l)).toFixed(3).replace(/^0/, '') : '';
+  let tw = 0, tl = 0;
+  body.innerHTML = COACHES.map(c => {
+    const l = coachGames(c), r = rec(l);
+    tw += r.w; tl += r.l;
+    const seasons = [...new Set(l.map(g => g.season))].sort();
+    let best = '';
+    if (!c.split && seasons.length > 1){
+      const b = seasons.map(s => ({s, r: rec(l.filter(g => g.season === s))})).sort((a, b) => (b.r.w / (b.r.w + b.r.l)) - (a.r.w / (a.r.w + a.r.l)) || b.r.w - a.r.w)[0];
+      best = b.s + ' (' + b.r.str + ')';
+    }
+    const yrs = c.from === c.to ? c.from : c.from + ' to ' + (c.to || 'present');
+    return '<tr><td><b>' + esc(c.name) + '</b></td><td>' + esc(yrs) + '</td><td>' + (c.split ? '1 (part)' : seasons.length) + '</td><td>' + r.str + '</td><td>' + pct(r) + '</td><td>' + rec(l.filter(g => g.site === 'H')).str + '</td><td>' + rec(l.filter(g => g.site === 'A')).str + '</td><td>' + rec(l.filter(g => g.site === 'N')).str + '</td><td>' + esc(best) + '</td></tr>';
+  }).join('') + '<tr class="season-break"><td>Totals</td><td></td><td></td><td>' + tw + '-' + tl + '</td><td>' + pct({w: tw, l: tl}) + '</td><td></td><td></td><td></td><td></td></tr>';
+  $('coachNote').textContent = 'Nancy Shay\'s total includes only the 5 known 1975-76 games; the official 1975-76 record is 9-7.';
+  const sn = $('seasonNotes');
+  if (sn) sn.innerHTML = Object.entries(SEASON_NOTES).map(([s, t]) => '<span class="mark">*</span> ' + esc(s) + ': ' + esc(t)).join('<br>');
+}
+
 function renderAll(){
   games.sort(byDate);
   const r = rec(games);
   $('tallyRec').textContent = r.w + '–' + r.l;
   $('tallyLbl').textContent = games.length + (games.length === 1 ? ' game' : ' games') + ' entered';
-  renderOppList(); renderSeries(); renderResults(); renderRecords();
+  renderOppList(); renderSeries(); renderResults(); renderRecords(); renderCoaches();
 }
 
 function allOppNames(){
@@ -493,7 +554,7 @@ function renderRecords(){
     const l = games.filter(g => g.season === s);
     const sc = l.filter(g => !g.forfeit);
     const pf = sc.length ? (sc.reduce((a, g) => a + g.ts, 0) / sc.length).toFixed(1) : '–', pa = sc.length ? (sc.reduce((a, g) => a + g.os, 0) / sc.length).toFixed(1) : '–';
-    return '<tr><td><b>' + esc(s) + '</b></td><td>' + rec(l).str + '</td><td>' + rec(l.filter(g => g.site === 'H')).str + '</td><td>' + rec(l.filter(g => g.site === 'A')).str + '</td><td>' + rec(l.filter(g => g.site === 'N')).str + '</td><td>' + pf + '–' + pa + '</td></tr>';
+    return '<tr><td><b>' + esc(s) + '</b></td><td>' + rec(l).str + '</td><td>' + rec(l.filter(g => g.site === 'H')).str + '</td><td>' + rec(l.filter(g => g.site === 'A')).str + '</td><td>' + rec(l.filter(g => g.site === 'N')).str + '</td><td>' + pf + '–' + pa + '</td><td>' + esc(seasonCoach(s)) + (SEASON_NOTES[s] ? ' <span class="mark" title="' + esc(SEASON_NOTES[s]) + '">*</span>' : '') + '</td></tr>';
   }).join('');
 }
 
