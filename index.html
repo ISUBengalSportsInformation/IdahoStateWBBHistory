@@ -382,8 +382,10 @@ function renderCoaches(){
 function renderAll(){
   games.sort(byDate);
   const r = rec(games);
-  $('tallyRec').textContent = r.w + '–' + r.l;
-  $('tallyLbl').textContent = games.length + (games.length === 1 ? ' game' : ' games') + ' entered';
+  // Official record = games on file + the 11 unknown 1975-76 games (official 9-7; 2-3 on file).
+  const OFFICIAL_ADJ = {w: 7, l: 4};
+  $('tallyRec').textContent = (r.w + OFFICIAL_ADJ.w) + '–' + (r.l + OFFICIAL_ADJ.l);
+  $('tallyLbl').textContent = 'Official all-time · ' + r.w + '–' + r.l + ' in ' + games.length.toLocaleString() + ' games on file';
   renderOppList(); renderSeries(); renderResults(); renderRecords(); renderCoaches();
 }
 
